@@ -1,22 +1,24 @@
 from typing import List, Dict, Any
-from langchain.agents import AgentType, initialize_agent
-from langchain.chains import LLMChain
-from langchain.chat_models import ChatAnthropic
-from langchain.prompts import PromptTemplate
-from langchain.agents import Tool
+import litellm
 from graph import TaskGraph, Node, NodeStatus, DependencyType
-
 
 class TaskPlannerAgent:
     def __init__(self, api_key: str):
-        self.llm = ChatAnthropic(model="claude-3-7-sonnet-latest", api_key=api_key)
+        # Configure LiteLLM with API key
+        litellm.api_key = api_key
+        self.model = "anthropic/claude-3-7-sonnet-20250219"
         self.graph = TaskGraph()
-        self._setup_chains()
-        self._setup_agent()
     
-    def _setup_chains(self):
-        """Set up LangChain chains for different task planning steps."""
-        # Task decomposition chain
+    def _make_llm_call(self, prompt: str) -> str:
+        """Make a call to the LLM using LiteLLM."""
+        response = litellm.completion(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+    
+    def _decompose_goal(self, goal: str) -> str:
+        """Break down a goal into tasks."""
         decomposition_template = """
         Your task is to break down a complex goal into smaller, actionable tasks.
         
@@ -38,39 +40,9 @@ class TaskPlannerAgent:
         6. Connect UI to API (depends on 4, 5)
         7. Test end-to-end solution (depends on 6)
         """
-        self.decomposition_chain = LLMChain(
-            llm=self.llm,
-            prompt=PromptTemplate(
-                input_variables=["goal"],
-                template=decomposition_template
-            )
-        )
-    
-    def _setup_agent(self):
-        """Set up the LangChain agent with custom tools."""
-        tools = [
-            Tool(
-                name="DecomposeGoal",
-                func=self._decompose_goal,
-                description="Break down a complex goal into smaller, actionable tasks"
-            ),
-            Tool(
-                name="CreateGraph",
-                func=self._create_graph_from_decomposition,
-                description="Create a task graph from the decomposed tasks"
-            )
-        ]
         
-        self.agent = initialize_agent(
-            tools=tools,
-            llm=self.llm,
-            agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=True
-        )
-    
-    def _decompose_goal(self, goal: str) -> str:
-        """Break down a goal into tasks."""
-        return self.decomposition_chain.run(goal=goal)
+        formatted_prompt = decomposition_template.format(goal=goal)
+        return self._make_llm_call(formatted_prompt)
     
     def _parse_decomposition(self, decomposition: str) -> List[Dict[str, Any]]:
         """Parse the LLM's task decomposition into structured data."""

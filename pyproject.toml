@@ -6,10 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
-    "langchain>=0.3.25",
-    "langchain-anthropic>=0.3.12",
-    "langchain-community>=0.3.23",
     "langchain-openai>=0.3.16",
+    "litellm>=1.67.6",
     "matplotlib>=3.10.1",
     "networkx>=3.4.2",
     "plotly>=6.0.1",
