@@ -9,7 +9,7 @@ from graph import TaskGraph, Node, NodeStatus, DependencyType
 
 class TaskPlannerAgent:
     def __init__(self, api_key: str):
-        self.llm = ChatAnthropic(model="claude-3-sonnet-20240229", api_key=api_key)
+        self.llm = ChatAnthropic(model="claude-3-7-sonnet-latest", api_key=api_key)
         self.graph = TaskGraph()
         self._setup_chains()
         self._setup_agent()
