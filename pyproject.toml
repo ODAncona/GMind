@@ -1,0 +1,15 @@
+[project]
+name = "gmind"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=0.3.25",
+    "langchain-cerebras>=0.5.0",
+    "matplotlib>=3.10.1",
+    "networkx>=3.4.2",
+    "plotly>=6.0.1",
+    "pydantic>=2.11.4",
+    "streamlit>=1.45.0",
+]
