@@ -150,38 +150,12 @@ with tab1:
             }
             
             # Create edge traces
-            edge_traces = []
-            for edge in G.edges():
-                x0, y0 = pos[edge[0]]
-                x1, y1 = pos[edge[1]]
-                
-                # Calculer la direction et réduire légèrement pour que la flèche ne touche pas le nœud
-                dx, dy = x1 - x0, y1 - y0
-                dist = (dx**2 + dy**2)**0.5
-                if dist == 0:  # Éviter division par zéro
-                    continue
-                    
-                # Réduire légèrement la longueur pour éviter de chevaucher les nœuds
-                shrink_factor = 0.85
-                end_x = x0 + dx * shrink_factor
-                end_y = y0 + dy * shrink_factor
-                
-                edge_trace = go.Scatter(
-                    x=[x0, end_x, None],
-                    y=[y0, end_y, None],
-                    line=dict(width=1.5, color='#888'),
-                    hoverinfo='none',
-                    mode='lines'  # Retiré +markers pour éviter les flèches problématiques
-                )
-                edge_traces.append(edge_trace)
-            
-            # Create node traces
             node_x = []
             node_y = []
             node_text = []
             node_colors = []
             node_ids = []
-            
+
             for node_id in G.nodes():
                 x, y = pos[node_id]
                 node_x.append(x)
@@ -192,9 +166,11 @@ with tab1:
                 status = node.status if node else "pending"
                 desc = node.description if node else "Unknown"
                 
-                node_text.append(f"{desc} ({status})")
+                # Word-wrap le texte à 20 caractères par ligne
+                wrapped_text = '<br>'.join([desc[i:i+20] for i in range(0, len(desc), 20)])
+                node_text.append(wrapped_text)
                 node_colors.append(status_colors.get(status, "gray"))
-            
+
             node_trace = go.Scatter(
                 x=node_x, y=node_y,
                 mode='markers+text',
@@ -205,14 +181,17 @@ with tab1:
                 marker=dict(
                     showscale=False,
                     color=node_colors,
-                    size=20,
+                    size=60,
                     line_width=2
+                ),
+                textfont=dict(
+                    size=12,
                 )
             )
-            
-            # Create figure - CORRECTION ICI: utiliser edge_traces et non edge_trace
+
+            # Utilisation des annotations pour les flèches
             fig = go.Figure(
-                data=[*edge_traces, node_trace],  # Utiliser edge_traces au lieu de edge_trace
+                data=[node_trace],
                 layout=go.Layout(
                     showlegend=False,
                     hovermode='closest',
@@ -220,9 +199,45 @@ with tab1:
                     xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                     yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                     height=600,
-                    clickmode='event+select'
+                    clickmode='event+select',
+                    annotations=[]
                 )
             )
+
+            # Ajouter les flèches comme annotations
+            for edge in G.edges():
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                
+                # Calculer la direction
+                dx, dy = x1 - x0, y1 - y0
+                dist = (dx**2 + dy**2)**0.5
+                if dist == 0:  # Éviter division par zéro
+                    continue
+                    
+                # Réduire la longueur pour ne pas superposer les nœuds
+                # Ajuster ces valeurs selon la taille de vos nœuds
+                shrink_factor = 0.85
+                end_x = x0 + dx * shrink_factor
+                end_y = y0 + dy * shrink_factor
+                start_x = x0 + dx * 0.15  # Début de la flèche décalé du centre du nœud source
+                start_y = y0 + dy * 0.15
+                
+                fig.add_annotation(
+                    x=end_x,
+                    y=end_y,
+                    ax=start_x,
+                    ay=start_y,
+                    xref='x',
+                    yref='y',
+                    axref='x',
+                    ayref='y',
+                    showarrow=True,
+                    arrowhead=2,  # Style de la flèche
+                    arrowsize=1.5,  # Taille de la tête de flèche
+                    arrowwidth=2,   # Largeur de la ligne
+                    arrowcolor='#888'
+                )
             
             # Display the graph
             selected_node = st.plotly_chart(fig, use_container_width=True, key="graph_plot")
