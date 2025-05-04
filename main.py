@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import os
 from typing import Dict, List, Optional
 import json
+import numpy as np
 
 # Import our custom modules
 from graph import TaskGraph, Node, NodeStatus, DependencyType
@@ -70,6 +71,21 @@ def add_task_manually():
         if dep_id in st.session_state.graph.nodes:
             st.session_state.graph.add_edge(source=dep_id, target=node_id)
 
+def advance_graph():
+    """Progress in the graph by updating eligible nodes to in_progress."""
+    graph = st.session_state.graph
+    
+    for node_id, node in graph.nodes.items():
+        if node.status == "pending":
+            predecessors = graph.get_predecessors(node_id)
+            all_deps_completed = all(
+                graph.get_node(pred_id).status == "completed" 
+                for pred_id in predecessors
+            )
+            
+            if all_deps_completed:
+                graph.update_node_status(node_id, "in_progress")
+
 # UI Layout
 st.title("🧠 GMind - Task Planning Orchestrator")
 
@@ -99,8 +115,13 @@ with st.sidebar:
 
 # Main area with tabs
 tab1, tab2 = st.tabs(["Graph View", "Task List"])
-
 with tab1:
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("Avancer dans le graphe", key="advance_button"):
+            advance_graph()
+            st.rerun()
+    
     # Graph visualization
     if not st.session_state.graph.nodes:
         st.info("No tasks in the graph. Create a plan or add tasks manually.")
@@ -108,90 +129,116 @@ with tab1:
         # Create NetworkX graph for visualization
         G = st.session_state.graph.to_networkx()
         
-        # Compute layout
-        pos = nx.spring_layout(G)
-        
-        # Node status colors
-        status_colors = {
-            "pending": "gray",
-            "in_progress": "orange",
-            "completed": "green",
-            "failed": "red"
-        }
-        
-        # Create edge traces
-        edge_x = []
-        edge_y = []
-        for edge in G.edges():
-            x0, y0 = pos[edge[0]]
-            x1, y1 = pos[edge[1]]
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
-        
-        edge_trace = go.Scatter(
-            x=edge_x, y=edge_y,
-            line=dict(width=1, color='#888'),
-            hoverinfo='none',
-            mode='lines'
-        )
-        
-        # Create node traces
-        node_x = []
-        node_y = []
-        node_text = []
-        node_colors = []
-        node_ids = []
-        
-        for node_id in G.nodes():
-            x, y = pos[node_id]
-            node_x.append(x)
-            node_y.append(y)
-            node_ids.append(node_id)
+        try:
+            # Compute layout
+            try:
+                if nx.is_planar(G):
+                    pos = nx.planar_layout(G)
+                else:
+                    # Assurez-vous que pydot est installé: pip install pydot graphviz
+                    pos = nx.nx_pydot.pydot_layout(G, prog='dot')
+            except:
+                # Fallback to spring layout if other methods fail
+                pos = nx.spring_layout(G)
+                
+            # Node status colors
+            status_colors = {
+                "pending": "lightgray",  # Gris pour pending
+                "in_progress": "blue",   # Vous pouvez ajuster cette couleur
+                "completed": "green",    # Vert pour done  
+                "failed": "red"          # Rouge pour fail
+            }
             
-            node = st.session_state.graph.get_node(node_id)
-            status = node.status if node else "pending"
-            desc = node.description if node else "Unknown"
+            # Create edge traces
+            edge_traces = []
+            for edge in G.edges():
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                
+                # Calculer la direction et réduire légèrement pour que la flèche ne touche pas le nœud
+                dx, dy = x1 - x0, y1 - y0
+                dist = (dx**2 + dy**2)**0.5
+                if dist == 0:  # Éviter division par zéro
+                    continue
+                    
+                # Réduire légèrement la longueur pour éviter de chevaucher les nœuds
+                shrink_factor = 0.85
+                end_x = x0 + dx * shrink_factor
+                end_y = y0 + dy * shrink_factor
+                
+                edge_trace = go.Scatter(
+                    x=[x0, end_x, None],
+                    y=[y0, end_y, None],
+                    line=dict(width=1.5, color='#888'),
+                    hoverinfo='none',
+                    mode='lines'  # Retiré +markers pour éviter les flèches problématiques
+                )
+                edge_traces.append(edge_trace)
             
-            node_text.append(f"{desc} ({status})")
-            node_colors.append(status_colors.get(status, "gray"))
-        
-        node_trace = go.Scatter(
-            x=node_x, y=node_y,
-            mode='markers+text',
-            text=node_text,
-            textposition='top center',
-            customdata=node_ids,
-            hoverinfo='text',
-            marker=dict(
-                showscale=False,
-                color=node_colors,
-                size=20,
-                line_width=2
+            # Create node traces
+            node_x = []
+            node_y = []
+            node_text = []
+            node_colors = []
+            node_ids = []
+            
+            for node_id in G.nodes():
+                x, y = pos[node_id]
+                node_x.append(x)
+                node_y.append(y)
+                node_ids.append(node_id)
+                
+                node = st.session_state.graph.get_node(node_id)
+                status = node.status if node else "pending"
+                desc = node.description if node else "Unknown"
+                
+                node_text.append(f"{desc} ({status})")
+                node_colors.append(status_colors.get(status, "gray"))
+            
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                text=node_text,
+                textposition='top center',
+                customdata=node_ids,
+                hoverinfo='text',
+                marker=dict(
+                    showscale=False,
+                    color=node_colors,
+                    size=20,
+                    line_width=2
+                )
             )
-        )
-        
-        # Create figure
-        fig = go.Figure(
-            data=[edge_trace, node_trace],
-            layout=go.Layout(
-                showlegend=False,
-                hovermode='closest',
-                margin=dict(b=20, l=5, r=5, t=40),
-                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                height=600,
-                clickmode='event+select'
+            
+            # Create figure - CORRECTION ICI: utiliser edge_traces et non edge_trace
+            fig = go.Figure(
+                data=[*edge_traces, node_trace],  # Utiliser edge_traces au lieu de edge_trace
+                layout=go.Layout(
+                    showlegend=False,
+                    hovermode='closest',
+                    margin=dict(b=20, l=5, r=5, t=40),
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    height=600,
+                    clickmode='event+select'
+                )
             )
-        )
+            
+            # Display the graph
+            selected_node = st.plotly_chart(fig, use_container_width=True, key="graph_plot")
+            
+            # Handle node selection
+            if selected_node and isinstance(selected_node, dict) and 'points' in selected_node:
+                for point in selected_node['points']:
+                    if 'customdata' in point:
+                        select_node(point['customdata'])
         
-        # Display the graph
-        selected_node = st.plotly_chart(fig, use_container_width=True, key="graph_plot")
-        
-        # Handle node selection
-        if selected_node and 'points' in selected_node:
-            for point in selected_node['points']:
-                if 'customdata' in point:
-                    select_node(point['customdata'])
+        except Exception as e:
+            st.error(f"Error rendering graph: {str(e)}")
+            # Fallback simple representation
+            st.write("Task nodes:")
+            for node_id, node in st.session_state.graph.nodes.items():
+                st.write(f"- {node.description} ({node.status})")
 
 with tab2:
     # Task list view
@@ -241,7 +288,7 @@ with tab2:
                     
                     if new_status != node.status:
                         update_node_status(node_id, new_status)
-                        st.experimental_rerun()
+                        st.rerun()
                 
                 # Show dependencies
                 predecessors = st.session_state.graph.get_predecessors(node_id)
@@ -270,7 +317,7 @@ if st.session_state.selected_node:
         
         if st.sidebar.button("Update Status"):
             update_node_status(st.session_state.selected_node, new_status)
-            st.experimental_rerun()
+            st.rerun()
         
         # Dependencies
         predecessors = st.session_state.graph.get_predecessors(st.session_state.selected_node)
@@ -294,4 +341,4 @@ if st.session_state.selected_node:
         if st.sidebar.button("Delete Task", type="primary"):
             st.session_state.graph.remove_node(st.session_state.selected_node)
             st.session_state.selected_node = None
-            st.experimental_rerun()
+            st.rerun()

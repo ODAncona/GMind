@@ -17,7 +17,7 @@ class TaskPlannerAgent:
         )
         return response.choices[0].message.content
     
-    def _decompose_goal(self, goal: str) -> str:
+    def _decompose_goal(self, goal: str, max_tasks: int = 5) -> str:
         """Break down a goal into tasks."""
         decomposition_template = """
         Your task is to break down a complex goal into smaller, actionable tasks.
@@ -25,7 +25,7 @@ class TaskPlannerAgent:
         Goal: {goal}
         
         Instructions:
-        1. Break down the goal into 3-7 main tasks
+        1. Break down the goal into main tasks (up to {max_tasks} tasks).
         2. For each task, provide:
            - A clear, concise description
            - Any dependencies on other tasks
@@ -41,7 +41,7 @@ class TaskPlannerAgent:
         7. Test end-to-end solution (depends on 6)
         """
         
-        formatted_prompt = decomposition_template.format(goal=goal)
+        formatted_prompt = decomposition_template.format(goal=goal, max_tasks=max_tasks)
         return self._make_llm_call(formatted_prompt)
     
     def _parse_decomposition(self, decomposition: str) -> List[Dict[str, Any]]:
@@ -115,10 +115,10 @@ class TaskPlannerAgent:
         
         return f"Created graph with {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges"
     
-    def process_goal(self, goal: str) -> TaskGraph:
+    def process_goal(self, goal: str, max_tasks: int = 5) -> TaskGraph:
         """Process a user goal and return the created task graph."""
         # Step 1: Decompose the goal into tasks
-        decomposition = self._decompose_goal(goal)
+        decomposition = self._decompose_goal(goal, max_tasks)
         
         # Step 2: Create the graph from the decomposed tasks
         self._create_graph_from_decomposition(decomposition)
