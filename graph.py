@@ -31,17 +31,11 @@ class Node(BaseModel):
     inputs: Optional[Dict] = None
     outputs: Optional[Dict] = None
 
-    class Config:
-        arbitrary_types_allowed = True
-
 
 class TaskGraph(BaseModel):
     nodes: Dict[str, Node] = {}
     edges: List[Edge] = []
     _graph: Optional[nx.DiGraph] = None
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def __init__(self, **data):
         super().__init__(**data)

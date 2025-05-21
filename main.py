@@ -23,12 +23,13 @@ if "graph" not in st.session_state:
 if "selected_node" not in st.session_state:
     st.session_state.selected_node = None
 if "agent" not in st.session_state:
-    api_key_anthropic = os.getenv("ANTHROPIC_API_KEY", "")
-    api_key_cerebras = os.getenv("CEREBRAS_API_KEY", "")
-    if api_key_cerebras:
-        st.session_state.agent = TaskPlannerAgent(api_key=api_key_cerebras)
-    else:
-        st.session_state.agent = None
+    st.session_state.agent = TaskPlannerAgent()
+    # api_key_anthropic = os.getenv("ANTHROPIC_API_KEY", "")
+    # api_key_cerebras = os.getenv("CEREBRAS_API_KEY", "")
+    # if api_key_cerebras:
+    #     st.session_state.agent = TaskPlannerAgent(api_key=api_key_cerebras)
+    # else:
+    #     st.session_state.agent = None
 
 
 # Functions for UI interactions
@@ -44,12 +45,6 @@ def select_node(node_id: str):
 
 def create_graph_from_goal():
     """Create a graph from the user's goal using the agent."""
-    if st.session_state.agent is None:
-        st.error(
-            "Anthropic API key not set. Please set the ANTHROPIC_API_KEY environment variable."
-        )
-        return
-
     goal = st.session_state.goal_input
     if not goal:
         st.warning("Please enter a goal.")

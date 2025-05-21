@@ -1,60 +1,52 @@
-from cerebras.cloud.sdk import Cerebras
+import os
 import json
-from graph import TaskGraph, Node, Edge
+from typing import List, Dict
+
+import litellm
 from pydantic import BaseModel, ValidationError
+from graph import TaskGraph
 
 
 class TaskPlannerAgent:
-    def __init__(
-        self, api_key: str, model: str = "llama-4-scout-17b-16e-instruct"
-    ):
-        self.client = Cerebras(api_key=api_key)
+    def __init__(self, model: str = "gpt-4o-2024-08-06"):
         self.model = model
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set.")
+        litellm.api_key = self.openai_api_key
 
-    def _generate_graph(self, goal: str, max_tasks: int = 5) -> TaskGraph:
-        schema = TaskGraph.model_json_schema()
+    def _generate_graph(self, goal: str, max_tasks: int = 7) -> TaskGraph:
+        schema = TaskGraph.model_json_schema(mode="validation")
         prompt = f"""
         Decompose the following goal into a task graph. Do not generate more than {max_tasks} tasks.
 
         Goal: {goal}
-
-        Schema: {json.dumps(schema, indent=2)}
-
-        Output: TaskGraph JSON No other text.
+        Schema: {schema}
+        output the task graph in JSON format
         """
-        print(f"Prompt: {prompt}")
-        completion = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": prompt}],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "task_graph",
-                    "strict": True,
-                    "schema": schema,
-                },
-            },
-        )
 
         try:
-            graph_data = json.loads(completion.choices[0].message.content)
-            task_graph = TaskGraph.model_validate(
-                graph_data
-            )  # Validate against your model
+            response = litellm.completion(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+            graph_data = json.loads(
+                response["choices"][0]["message"]["content"]
+            )
+            task_graph = TaskGraph.model_validate(graph_data)
             return task_graph
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
             print(
-                f"JSON decoding error: {e}, Raw response: {completion.choices[0].message.content}"
+                f"Error processing OpenAI response: {e}, Response: {response}"
             )
-            return TaskGraph()  # Return an empty graph on error
+            return TaskGraph()  # Return empty graph on error
         except ValidationError as e:
-            print(
-                f"Validation error: {e}, Raw response: {completion.choices[0].message.content}"
-            )
-            return TaskGraph()  # Return an empty graph on error
+            print(f"Validation error: {e}, Response: {response}")
+            return TaskGraph()
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-            return TaskGraph()  # Return an empty graph on error
+            return TaskGraph()
 
     def process_goal(self, goal: str, max_tasks: int = 5) -> TaskGraph:
         return self._generate_graph(goal, max_tasks)
