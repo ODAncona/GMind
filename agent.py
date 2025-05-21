@@ -1,9 +1,7 @@
-import os
 from cerebras.cloud.sdk import Cerebras
 import json
 from graph import TaskGraph, Node, Edge
 from pydantic import BaseModel, ValidationError
-from typing import Dict, List
 
 
 class TaskPlannerAgent:
@@ -16,13 +14,13 @@ class TaskPlannerAgent:
     def _generate_graph(self, goal: str, max_tasks: int = 5) -> TaskGraph:
         schema = TaskGraph.model_json_schema()
         prompt = f"""
-        Decompose the following goal into a task graph. The response MUST be valid JSON conforming to the schema below. Do not generate more than {max_tasks} tasks.
+        Decompose the following goal into a task graph. Do not generate more than {max_tasks} tasks.
 
         Goal: {goal}
 
         Schema: {json.dumps(schema, indent=2)}
 
-        Output: JSON only. No other text.
+        Output: TaskGraph JSON No other text.
         """
         print(f"Prompt: {prompt}")
         completion = self.client.chat.completions.create(
