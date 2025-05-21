@@ -16,7 +16,7 @@ class TaskPlannerAgent:
     def _generate_graph(self, goal: str, max_tasks: int = 5) -> TaskGraph:
         schema = TaskGraph.model_json_schema()
         prompt = f"""
-        Decompose the following goal into a task graph. The response MUST be valid JSON conforming to the schema below.
+        Decompose the following goal into a task graph. The response MUST be valid JSON conforming to the schema below. Do not generate more than {max_tasks} tasks.
 
         Goal: {goal}
 
@@ -24,7 +24,7 @@ class TaskPlannerAgent:
 
         Output: JSON only. No other text.
         """
-
+        print(f"Prompt: {prompt}")
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": prompt}],
