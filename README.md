@@ -1,6 +1,8 @@
 
 # GMind - Enhanced Specification
 
+`streamlit run main.py`
+
 ## Project Overview
 
 GMind is an AI-powered planning orchestration system that decomposes complex user goals into actionable sub-tasks, represents them as a dynamic graph structure, and facilitates execution tracking through an interactive visual interface.

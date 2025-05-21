@@ -2,9 +2,7 @@ import streamlit as st
 import networkx as nx
 import plotly.graph_objects as go
 import os
-from typing import Dict, List, Optional
 import json
-import numpy as np
 
 # Import our custom modules
 from graph import TaskGraph, Node, NodeStatus, DependencyType
@@ -72,12 +70,45 @@ def add_task_manually():
             st.session_state.graph.add_edge(source=dep_id, target=node_id)
 
 def advance_graph():
-    """Progress in the graph by updating eligible nodes to in_progress."""
+    """Progress in the graph by advancing nodes through their lifecycle based on topological order.
+    
+    Flow: pending -> in_progress -> completed
+    """
     graph = st.session_state.graph
     
-    for node_id, node in graph.nodes.items():
-        if node.status == "pending":
-            predecessors = graph.get_predecessors(node_id)
+    # Vérifier si le graphe est un DAG
+    if not graph.is_dag():
+        st.error("Le graphe contient des cycles et ne peut pas être avancé automatiquement.")
+        return
+    
+    # Obtenir l'ordre topologique des nœuds
+    try:
+        topo_order = graph.get_critical_path()
+    except Exception as e:
+        st.error(f"Erreur lors du calcul de l'ordre topologique: {str(e)}")
+        return
+    
+    # Créer un dictionnaire pour suivre les nœuds qui ont été mis à jour
+    updated_nodes = {}
+    
+    # Parcourir les nœuds dans l'ordre topologique
+    for node_id in topo_order:
+        node = graph.get_node(node_id)
+        if not node:
+            continue
+            
+        # Obtenir les prédécesseurs
+        predecessors = graph.get_predecessors(node_id)
+        
+        # 1. Si le nœud est "in_progress", vérifier s'il peut être complété
+        if node.status == "in_progress":
+            # Compléter automatiquement un nœud "in_progress"
+            graph.update_node_status(node_id, "completed")
+            updated_nodes[node_id] = "completed"
+            
+        # 2. Si le nœud est "pending", vérifier s'il peut être mis "in_progress"
+        elif node.status == "pending":
+            # Un nœud peut passer à "in_progress" si tous ses prédécesseurs sont "completed"
             all_deps_completed = all(
                 graph.get_node(pred_id).status == "completed" 
                 for pred_id in predecessors
@@ -85,6 +116,20 @@ def advance_graph():
             
             if all_deps_completed:
                 graph.update_node_status(node_id, "in_progress")
+                updated_nodes[node_id] = "in_progress"
+    
+    # Afficher un récapitulatif des changements
+    if updated_nodes:
+        st.success(f"Progression du graphe: {len(updated_nodes)} nœuds mis à jour")
+        
+        # Afficher les détails dans un expandable
+        with st.expander("Détails des mises à jour"):
+            for node_id, new_status in updated_nodes.items():
+                node = graph.get_node(node_id)
+                if node:
+                    st.write(f"• **{node.description}**: passé à **{new_status}**")
+    else:
+        st.info("Aucun nœud n'a pu être avancé. Soit tous les nœuds sont déjà terminés, soit certaines dépendances bloquent la progression.")
 
 # UI Layout
 st.title("🧠 GMind - Task Planning Orchestrator")
@@ -97,7 +142,14 @@ with st.sidebar:
     st.button("Generate Plan", on_click=create_graph_from_goal)
     
     st.divider()
-    
+
+    st.header("Graph Progression")
+    if st.button("Progress in the Graph", key="advance_button"):
+        advance_graph()
+        st.rerun()
+
+    st.divider()
+        
     st.header("Add Task Manually")
     st.text_input("Task Description", key="new_task_description")
     st.text_input("Dependencies (comma-separated IDs)", key="new_task_dependencies")
@@ -116,12 +168,6 @@ with st.sidebar:
 # Main area with tabs
 tab1, tab2 = st.tabs(["Graph View", "Task List"])
 with tab1:
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button("Avancer dans le graphe", key="advance_button"):
-            advance_graph()
-            st.rerun()
-    
     # Graph visualization
     if not st.session_state.graph.nodes:
         st.info("No tasks in the graph. Create a plan or add tasks manually.")
